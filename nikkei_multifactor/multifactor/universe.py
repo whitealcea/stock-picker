@@ -31,6 +31,11 @@ def normalize_symbol(symbol: str) -> str:
     return s
 
 
+def _is_jp_ticker(symbol: str) -> bool:
+    s = normalize_symbol(symbol)
+    return bool(re.fullmatch(r"\d{4}\.T", s))
+
+
 def _flatten_columns(df: pd.DataFrame) -> list[str]:
     flat: list[str] = []
     for col in df.columns:
@@ -95,7 +100,16 @@ def load_symbols_from_csv(path: str | Path) -> list[str]:
     if "symbol" in lower_map:
         raw = df[lower_map["symbol"]]
     else:
-        raw = df.iloc[:, 0]
+        # symbol列が無い場合は、最も「4桁コードらしい」列を採用
+        best_col = None
+        best_score = -1
+        for col in df.columns:
+            values = df[col].dropna().astype(str)
+            score = int(sum(_is_jp_ticker(v) for v in values))
+            if score > best_score:
+                best_score = score
+                best_col = col
+        raw = df[best_col] if best_col is not None else df.iloc[:, 0]
 
     symbols = [normalize_symbol(v) for v in raw.dropna().astype(str).tolist()]
     symbols = [s for s in symbols if s]
